@@ -15,12 +15,11 @@ bool find_shortest_path(graph const& graph_,
                         edge_len && len_functor,
                         path_visitor&& visitor) {
 
-    typedef typename graph::vertex_data vertex_data;
-    typedef typename graph::edge_const_iterator edge_const_iterator;
-
-    typedef std::map<vertex_data, double> distance;
-    typedef std::map<vertex_data, edge_const_iterator> vertex_prev;
-    typedef std::map<vertex_data, bool> visit;
+    typedef typename graph::vertex_data                             vertex_data;
+    typedef typename graph::edge_const_iterator                     edge_const_iterator;
+    typedef          std::map<vertex_data, double>                  distance;
+    typedef          std::map<vertex_data, edge_const_iterator>     vertex_prev;
+    typedef          std::map<vertex_data, bool>                    visit;
 
 
     auto end = graph_.vertex_end();
@@ -45,7 +44,7 @@ bool find_shortest_path(graph const& graph_,
     distance_[*from] = .0;
 
     for (auto vertex = begin; vertex != end; vertex++) {
-        // find min edge from not visited vertex
+
         auto current_vertex = end;
         for (auto item = begin; item != end; item++) {
             if (!visit_[*item] && (current_vertex == end  ||
@@ -78,13 +77,15 @@ bool find_shortest_path(graph const& graph_,
     std::vector<edge_const_iterator> full_path;
     auto  vertex = *to;
     for (; vertex != *from;) {
-        if ( vertex_prev_.find (vertex) == vertex_prev_.end () || vertex == *vertex_prev_[vertex].from()) {
+        if ( vertex_prev_.find (vertex) == vertex_prev_.end () ||
+             vertex == *vertex_prev_[vertex].from()) {
             break;
         }
         full_path.push_back (vertex_prev_[vertex]);
         vertex = *vertex_prev_[vertex].from();
     }
-    if (full_path.size () == 0 || (full_path.size () == 1 && *full_path[0].from() == 0)) {
+    if (full_path.size () == 0 || (full_path.size () == 1
+                                   && *full_path[0].from() == 0)) {
         return false;
     }
     std::reverse (full_path.begin(), full_path.end());
@@ -93,7 +94,6 @@ bool find_shortest_path(graph const& graph_,
     }
 
     return true;
-
 }
 } // namespace au
 

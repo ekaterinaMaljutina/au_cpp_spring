@@ -53,9 +53,9 @@ public:public:
 template<class iter, class vertex_iterator>
 class edge_policy {
 public:
-    typedef typename iter::value_type::value_type    value_type; // edge_data
+    typedef typename iter::value_type::value_type    value_type;
 protected:
-    typedef typename iter::value_type                value_type_from_iter; //edge
+    typedef typename iter::value_type                value_type_from_iter;
     typedef typename iter::difference_type           difference_type;
     typedef          value_type&                     reference ;
     typedef          value_type*                     pointer ;
@@ -65,7 +65,7 @@ protected:
 
     iter iter_;
     static bool const flag_const_value = false;
-public:public:
+public:
     edge_policy() = default;
     edge_policy(iter const &it) : iter_(it) {}
 
@@ -94,6 +94,7 @@ protected:
     typedef typename iter::value_type           value_type_from_iter;
     typedef          value_type&                reference ;
     typedef          value_type*                pointer;
+
     virtual const value_type& dereference(iter const & it) const = 0;
     static bool const flag_const_value = true;
     iter iter_;
@@ -114,9 +115,6 @@ struct filter_true {
     bool operator() (type const &) const{
         return true;
     }
-    bool operator() (type &) {
-        return true;
-    }
 };
 
 template<class iter, class base_policy, class policy, class filter =
@@ -128,17 +126,16 @@ struct iterator : public base_policy, policy {
     typedef typename base_policy::pointer           pointer;
     typedef          std::ptrdiff_t                 difference_type;
     typedef          std::forward_iterator_tag      iterator_category;
-
-     using predicate = std::function<bool(iter)>;
+    typedef          std::function<bool(iter)>      filter_function ;
 
     using base_policy::iter_;
     using base_policy::flag_const_value;
     using policy::ref;
 
     iterator() = default;
-    iterator(iter const &it, predicate func = filter()) : base_policy(it),
-        filter_(func) {end_ = iter(); }
-    iterator(iter const &it, iter const &end, predicate func = filter()) :
+    iterator(iter const &it, filter_function func = filter()) : base_policy(it),
+        filter_(func) { }
+    iterator(iter const &it, iter const &end, filter_function func = filter()) :
         base_policy(it), filter_(func), end_(end) { }
 
     iterator(iterator const &it) :base_policy(it.iter_) {
@@ -183,7 +180,7 @@ struct iterator : public base_policy, policy {
     }
 
 private:
-    predicate filter_;
+    filter_function filter_;
     iter end_;
 };
 

@@ -12,28 +12,26 @@ namespace au {
 template<class vertex_type, class edge_type>
 class graph {
 public:
-    struct hash_edge;
+    typedef vertex_type                         vertex_data;
+    typedef edge_type                           edge_data;
+    typedef std::unordered_set<vertex_data>     vertexies;
 
-    typedef vertex_type vertex_data;
-    typedef edge_type edge_data;
-
-    typedef std::unordered_set<vertex_data> vertexies;
-
-    using vertex_iterator_type = typename vertexies::const_iterator;
+    using vertex_iterator_type       = typename vertexies::const_iterator;
     using vertex_const_iterator_type = typename vertexies::const_iterator;
 
-    using vertex_const_iterator = iterator<vertex_const_iterator_type,
+    using vertex_const_iterator      = iterator<vertex_const_iterator_type,
                                 vertex_policy<vertex_const_iterator_type>,
                                 base<vertex_const_iterator_type>>;
 
-    using vertex_iterator = vertex_const_iterator;
+    using vertex_iterator            = vertex_const_iterator;
 
     struct edge {
         typedef edge_data value_type;
 
         edge () = default;
 
-        edge(vertex_data const& from, vertex_data const& to,std::shared_ptr<vertexies> vert):
+        edge(vertex_data const& from, vertex_data const& to,
+             std::shared_ptr<vertexies> vert) :
                 vertexies_prt(vert), from_(from), to_(to) { }
 
         edge(vertex_data const& from, vertex_data const& to,
@@ -67,10 +65,10 @@ public:
             return os;
         }
     private:
-        std::shared_ptr<vertexies> vertexies_prt;
-        vertex_data from_;
-        vertex_data to_;
-        edge_data  data_;
+        std::shared_ptr<vertexies>  vertexies_prt;
+        vertex_data                 from_;
+        vertex_data                 to_;
+        edge_data                   data_;
 
     };
 
@@ -82,16 +80,17 @@ public:
     };
 
 
-    typedef std::unordered_set<edge, hash_edge> edge_set;
-    typedef std::unordered_map<vertex_data, edge_set> edges;
+    typedef std::unordered_set<edge, hash_edge>         edge_set;
+    typedef std::unordered_map<vertex_data, edge_set>   edges;
 
-    using edge_iterator_type = typename edge_set::iterator;
+    using edge_iterator_type       = typename edge_set::iterator;
     using edge_const_iterator_type = typename edge_set::const_iterator;
 
-    using edge_iterator = iterator<edge_iterator_type,
+    using edge_iterator            =          iterator<edge_iterator_type,
                                 edge_policy<edge_iterator_type, vertex_iterator>,
                                 base<edge_iterator_type>>;
-    using edge_const_iterator = iterator<edge_const_iterator_type,
+
+    using edge_const_iterator      =          iterator<edge_const_iterator_type,
                                 const_edge_policy<edge_const_iterator_type,
                                             vertex_const_iterator>,
                                 base<edge_const_iterator_type>>;
@@ -99,34 +98,6 @@ public:
 
     graph() {
         vertexies_ = std::make_shared<vertexies>();
-    }
-
-    graph(graph&& other) : graph() {
-        move_swap(std::move(other));
-    }
-
-    graph(graph const& other) : graph() {
-        for (auto vertex : *other.vertexies_) {
-            add_vertex(vertex);
-        }
-
-        for (auto edge_set : other.edges_) {
-            for (auto edge : edge_set.second) {
-                auto from_ = find_vertex(*edge.from());
-                auto to_ = find_vertex(*edge.to());
-                add_edge(from_, to_, edge.data());
-            }
-        }
-    }
-
-    void move_swap(graph&& other) {
-        vertexies_ = std::move(other.vertexies_);
-        edges_ = std::move(other.edges_);
-    }
-
-    graph& operator=(graph other) {
-        move_swap(std::move(other));
-        return *this;
     }
 
 
@@ -146,7 +117,6 @@ public:
             edges_[*from];
         }
         iter = edges_.find (*from);
-//        edge edge_(*from, *to, data, vertexies_.get ());
         iter->second.insert({*from, *to, data, vertexies_});
         return edge_iterator(edges_[*from].begin(), edges_[*from].end());
     }
@@ -198,11 +168,9 @@ public:
 
     edge_iterator find_edge(vertex_iterator const &from,
                             vertex_iterator const &to) {
-        auto from_iter = edges_.find (*from);
-        if (from_iter == edges_.end ()) {
+        if (edges_.find (*from) == edges_.end ()) {
             return edge_iterator();
         }
-//        auto iter_set = edges_.at (*from);
         auto iter =  edges_.at (*from).find({*from, *to, vertexies_});
         return edge_iterator(iter,  edges_.at (*from).end());
     }
@@ -213,8 +181,7 @@ public:
 
     edge_const_iterator find_edge(vertex_iterator const  &from,
                                   vertex_iterator const  &to) const {
-        auto from_iter = edges_.find (*from);
-        if (from_iter == edges_.end ()) {
+        if (edges_.find (*from) == edges_.end ()) {
             return edge_const_iterator();
         }
         auto iter =  edges_.at (*from).find({*from, *to, vertexies_});
@@ -253,23 +220,21 @@ public:
 
     edge_const_iterator edge_begin(vertex_iterator const &from) const {
         if (edges_.find (*from) != edges_.cend()) {
-            return edge_const_iterator( edges_.at (*from).cbegin(),
-                                        edges_.at (*from).cend());
+            return edge_const_iterator( edges_.at (*from).cbegin(), edges_.at (*from).cend());
         }
         return edge_const_iterator();
     }
 
     edge_const_iterator edge_end(vertex_iterator const  &from) const {
         if (edges_.find (*from) != edges_.cend()) {
-            return edge_const_iterator(edges_.at (*from).cend(),
-                                       edges_.at (*from).cend());
+            return edge_const_iterator(edges_.at (*from).cend(), edges_.at (*from).cend());
         }
         return edge_const_iterator();
     }
 
 private:
-    std::shared_ptr<vertexies> vertexies_;
-    edges edges_;
+    std::shared_ptr<vertexies>  vertexies_;
+    edges                       edges_;
 
 }; // class graph
 }
