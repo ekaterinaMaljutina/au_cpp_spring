@@ -77,9 +77,8 @@ public:
         if (from == vertex_end || to == vertex_end ) {
             return edge_iterator();
         }
-        auto from_iter = graph_.find_vertex (*from);
-        auto to_iter = graph_.find_vertex (*to);
-        auto iter = graph_.find_edge (from_iter, to_iter);
+        auto iter = graph_.find_edge (graph_.find_vertex (*from),
+                                      graph_.find_vertex (*to));
         if (vertex_filter_(*iter.from()) && vertex_filter_(*iter.to())
                 && edge_filter_(*iter)) {
             return edge_iterator(iter, graph_.edge_end (graph_.find_vertex (*from)),
