@@ -24,7 +24,7 @@ public:
 
     using vertex_const_iterator = iterator<vertex_const_iterator_type,
                                 vertex_policy<vertex_const_iterator_type>,
-                                base_vertex<vertex_const_iterator_type>>;
+                                base<vertex_const_iterator_type>>;
 
     using vertex_iterator = vertex_const_iterator;
 
@@ -33,14 +33,13 @@ public:
 
         edge () = default;
 
-        edge(vertex_data const& from, vertex_data const& to) :
-            from_(from), to_(to) {
-        }
+        edge(vertex_data const& from, vertex_data const& to,std::shared_ptr<vertexies> vert):
+                vertexies_prt(vert), from_(from), to_(to) { }
 
         edge(vertex_data const& from, vertex_data const& to,
-             edge_data const& edges, std::shared_ptr<vertexies> const &vert):
-                vertexies_prt(vert),
-                from_(from), to_(to), data_(edges) { }
+             edge_data const& edges, std::shared_ptr<vertexies> vert):
+                vertexies_prt(vert), from_(from), to_(to), data_(edges) {\
+        }
 
         bool operator == (edge const & e) const {
             return from_ == e.from_ && to_ == e.to_;
@@ -50,16 +49,8 @@ public:
             return vertex_const_iterator(vertexies_prt->find (from_));
         }
 
-        vertex_data from_data() const {
-            return from_;
-        }
-
         vertex_const_iterator to() const {
             return vertex_const_iterator(vertexies_prt->find (to_));
-        }
-
-        vertex_data to_data() const {
-            return to_;
         }
 
         value_type& data() {
@@ -85,11 +76,10 @@ public:
 
     struct hash_edge {
         size_t operator() (edge const &edge) const {
-            return std::hash<vertex_data>()(edge.from_data ()) ^
-                   std::hash<vertex_data>()(edge.to_data ());
+            return std::hash<vertex_data>()(*edge.from())^
+                   std::hash<vertex_data>()(*edge.to());
         }
     };
-
 
 
     typedef std::unordered_set<edge, hash_edge> edge_set;
@@ -99,34 +89,66 @@ public:
     using edge_const_iterator_type = typename edge_set::const_iterator;
 
     using edge_iterator = iterator<edge_iterator_type,
-                                edge_policy<edge_iterator_type,
-                                            edge_data,
-                                            vertex_iterator>,
-                                base_edge<edge_iterator_type>>;
+                                edge_policy<edge_iterator_type, vertex_iterator>,
+                                base<edge_iterator_type>>;
     using edge_const_iterator = iterator<edge_const_iterator_type,
                                 const_edge_policy<edge_const_iterator_type,
-                                            edge_data,
                                             vertex_const_iterator>,
-                                base_edge<edge_const_iterator_type>>;
+                                base<edge_const_iterator_type>>;
 
 
     graph() {
         vertexies_ = std::make_shared<vertexies>();
     }
 
+    graph(graph&& other) : graph() {
+        move_swap(std::move(other));
+    }
+
+    graph(graph const& other) : graph() {
+        for (auto vertex : *other.vertexies_) {
+            add_vertex(vertex);
+        }
+
+        for (auto edge_set : other.edges_) {
+            for (auto edge : edge_set.second) {
+                auto from_ = find_vertex(*edge.from());
+                auto to_ = find_vertex(*edge.to());
+                add_edge(from_, to_, edge.data());
+            }
+        }
+    }
+
+    void move_swap(graph&& other) {
+        vertexies_ = std::move(other.vertexies_);
+        edges_ = std::move(other.edges_);
+    }
+
+    graph& operator=(graph other) {
+        move_swap(std::move(other));
+        return *this;
+    }
+
+
     vertex_iterator add_vertex(vertex_data const &data) {
         auto pair_iter = vertexies_->insert (data);
         if (pair_iter.second){
-            return vertex_iterator(pair_iter.first);
+            return vertex_iterator(pair_iter.first, vertexies_->end ());
         }
-        return vertex_iterator();
+        return vertex_iterator(vertexies_->end (), vertexies_->end ());
     }
 
     edge_iterator add_edge (vertex_iterator const &from,
                             vertex_iterator const &to,
                             edge_data const& data) {
-        return edge_iterator(edges_[*from].insert(
-                { *from, *to, data, vertexies_ }).first);
+        auto iter = edges_.find (*from);
+        if (iter == edges_.end ()) {
+            edges_[*from];
+        }
+        iter = edges_.find (*from);
+//        edge edge_(*from, *to, data, vertexies_.get ());
+        iter->second.insert({*from, *to, data, vertexies_});
+        return edge_iterator(edges_[*from].begin(), edges_[*from].end());
     }
 
     void remove_vertex(vertex_iterator const  &iter) {
@@ -136,15 +158,19 @@ public:
              edges_begin++) {
             for (auto item = edges_begin->second.begin();
                  item != edges_begin->second.end(); item++) {
-                if(item->to_data() == value ||
-                        item->from_data() == value) {
+                if(*item->to() == value ||
+                        *item->from() == value) {
                     save.insert ({edges_begin->first, *item});
                 }
             }
         }
 
         for (auto & item : save) {
-            edges_[item.first].erase(item.second);
+            if (edges_.find (item.first) != edges_.end()) {
+                if (edges_[item.first].find(item.second) != edges_[item.first].end()) {
+                    edges_[item.first].erase(item.second);
+                }
+            }
         }
 
         auto it = vertexies_->find (value) ;
@@ -155,11 +181,19 @@ public:
 
     void remove_edge(edge_iterator const &iter) {
         auto from = *iter.from ();
-        edges_[from].erase({ from, *iter.to()}) ;
+        auto to = *iter.to ();
+        auto iter_to = vertexies_->find (to);
+        auto iter_from = vertexies_->find (from);
+        if (iter_from != vertexies_->end () && iter_to != vertexies_->end()) {
+            edge edge_(from,to, vertexies_);
+            if (edges_[from].find(edge_) != edges_[from].end()) {
+                edges_[from].erase(edge_);
+            }
+        }
     }
 
     vertex_iterator find_vertex(vertex_data const &data) {
-        return vertex_iterator(vertexies_->find (data));
+        return vertex_iterator(vertexies_->find (data), vertexies_->end ());
     }
 
     edge_iterator find_edge(vertex_iterator const &from,
@@ -168,13 +202,13 @@ public:
         if (from_iter == edges_.end ()) {
             return edge_iterator();
         }
-        auto iter_set = edges_.at (*from);
-        auto iter =  iter_set.find({*from, *to});
-        return edge_iterator(iter);
+//        auto iter_set = edges_.at (*from);
+        auto iter =  edges_.at (*from).find({*from, *to, vertexies_});
+        return edge_iterator(iter,  edges_.at (*from).end());
     }
 
     vertex_const_iterator find_vertex(vertex_data const & data) const {
-        return vertex_const_iterator(vertexies_->find (data));
+        return vertex_const_iterator(vertexies_->find (data), vertexies_->end ());
     }
 
     edge_const_iterator find_edge(vertex_iterator const  &from,
@@ -183,51 +217,52 @@ public:
         if (from_iter == edges_.end ()) {
             return edge_const_iterator();
         }
-        const auto iter_set = edges_.at (*from);
-        auto iter =  iter_set.find({*from, *to});
-        return edge_const_iterator(iter);
+        auto iter =  edges_.at (*from).find({*from, *to, vertexies_});
+        return edge_const_iterator(iter, edges_.at (*from).end());
     }
 
     vertex_iterator vertex_begin() {
-        return vertex_iterator(vertexies_->begin ());
+        return vertex_iterator(vertexies_->begin (), vertexies_->end ());
     }
 
     vertex_iterator vertex_end() {
-        return vertex_iterator(vertexies_->end ());
+        return vertex_iterator(vertexies_->end (), vertexies_->end());
     }
 
     vertex_const_iterator vertex_begin() const {
-        return vertex_const_iterator(vertexies_->begin ());
+        return vertex_const_iterator(vertexies_->begin (), vertexies_->end());
     }
 
     vertex_const_iterator vertex_end() const {
-        return vertex_const_iterator(vertexies_->end ());
+        return vertex_const_iterator(vertexies_->end (), vertexies_->end ());
     }
 
     edge_iterator edge_begin(vertex_iterator const &from) {
         if (edges_.find (*from) != edges_.end ()) {
-            return edge_iterator(edges_[*from].begin());
+            return edge_iterator(edges_[*from].begin(), edges_[*from].end());
         }
         return edge_iterator();
     }
 
     edge_iterator edge_end(vertex_iterator const &from) {
         if (edges_.find (*from) != edges_.end ()) {
-            return edge_iterator(edges_[*from].end());
+            return edge_iterator(edges_[*from].end(), edges_[*from].end());
         }
         return edge_iterator();
     }
 
     edge_const_iterator edge_begin(vertex_iterator const &from) const {
         if (edges_.find (*from) != edges_.cend()) {
-            return edge_const_iterator(edges_.at (*from).cbegin());
+            return edge_const_iterator( edges_.at (*from).cbegin(),
+                                        edges_.at (*from).cend());
         }
         return edge_const_iterator();
     }
 
     edge_const_iterator edge_end(vertex_iterator const  &from) const {
         if (edges_.find (*from) != edges_.cend()) {
-            return edge_const_iterator(edges_.at (*from).cend());
+            return edge_const_iterator(edges_.at (*from).cend(),
+                                       edges_.at (*from).cend());
         }
         return edge_const_iterator();
     }

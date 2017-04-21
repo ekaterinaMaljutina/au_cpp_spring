@@ -9,56 +9,129 @@ template<class graph, typename vertex_filter,typename edge_filter>
 class filtered_graph {
 public:
 
-    using vertex_data = typename graph::vertex_data;
-    using edge_data = typename graph::edge_data;
+    typedef typename graph::vertex_data                  vertex_data;
+    typedef typename graph::edge_data                    edge_data;
+    typedef          std::function<bool(vertex_data)>    vertex_function;
+    typedef          std::function<bool(edge_data)>      edge_function;
+    typedef typename graph::vertex_const_iterator        vertex_const_iterator_graph;
+    typedef typename graph::edge_const_iterator          edge_const_iterator_type;
 
-    using edge = typename graph::edge;
+    class vertex_filter_function {
+    public:
+        vertex_filter_function(vertex_function const &filter) : filter_(filter) { }
 
-    using vertex_const_iterator_graph  = typename graph::vertex_const_iterator;
-    using edge_const_iterator_type  = typename graph::edge_const_iterator;
+        bool operator()(vertex_const_iterator_graph const & iter) const {
+            return filter_(*iter);
+        }
 
-    using vertex_iterator = iterator<vertex_const_iterator_graph,
-                                    vertex_policy<vertex_const_iterator_graph>,
-                                    base_vertex<vertex_const_iterator_graph>,
-                                    vertex_filter>;
+    private:
+        vertex_function filter_;
+    };
+
+    class edge_filter_function {
+    public:
+        edge_filter_function(edge_function const &filter,
+                             vertex_function const &filter_vertex)
+            : filter_(filter), filter_vertex_(filter_vertex) { }
+
+        bool operator()(edge_const_iterator_type const & iter) const {
+            return filter_(*iter) && filter_vertex_(*iter.from ())
+                    && filter_vertex_(*iter.to());
+        }
+
+    private:
+        edge_function filter_;
+        vertex_function filter_vertex_;
+    };
+
+    using vertex_iterator = iterator<vertex_const_iterator_graph ,
+                                    vertex_policy<vertex_const_iterator_graph >,
+                                    base<vertex_const_iterator_graph>>;
     using edge_iterator = iterator<edge_const_iterator_type,
-                                const_edge_policy<edge_const_iterator_type,
-                                            edge_data,
+                                    filter_policy<edge_const_iterator_type,
                                             vertex_const_iterator_graph>,
-                                base_edge<edge_const_iterator_type>>; //,
-//                                edge_filter>;
+                                    base<edge_const_iterator_type>>;
     using edge_const_iterator = edge_iterator;
+
+    using vertex_const_iterator = vertex_iterator;
 
     filtered_graph(graph const& g) : graph_(g) {}
 
     filtered_graph(graph const& g, vertex_filter const &vertex_filter_,
                    edge_filter const & edge_filter_) :
         graph_(g), vertex_filter_(vertex_filter_),
-        edge_filter_(edge_filter_) {}
+        edge_filter_(edge_filter_) { }
 
     vertex_iterator find_vertex(vertex_data const& data) const {
-        return vertex_iterator(graph_.find_vertex (data), vertex_filter_);
+        if (!vertex_filter_(data)) {
+            return vertex_iterator(graph_.vertex_end (), graph_.vertex_end (),
+                                   vertex_filter_function(vertex_filter_));
+        }
+        return vertex_iterator(graph_.find_vertex (data),
+                               graph_.vertex_end (),
+                               vertex_filter_function(vertex_filter_));
     }
     edge_iterator find_edge (vertex_iterator const &from,
                              vertex_iterator const &to) const {
+        auto vertex_end = vertex_iterator(graph_.vertex_end ());
+        if (from == vertex_end || to == vertex_end ) {
+            return edge_iterator();
+        }
         auto from_iter = graph_.find_vertex (*from);
         auto to_iter = graph_.find_vertex (*to);
         auto iter = graph_.find_edge (from_iter, to_iter);
-        return edge_iterator(iter);
+        if (vertex_filter_(*iter.from()) && vertex_filter_(*iter.to())
+                && edge_filter_(*iter)) {
+            return edge_iterator(iter, graph_.edge_end (graph_.find_vertex (*from)),
+                             edge_filter_function( edge_filter_,vertex_filter_));
+        }
+        return edge_iterator(graph_.edge_end (graph_.find_vertex (*from)),
+                             graph_.edge_end (graph_.find_vertex (*from)),
+                             edge_filter_function( edge_filter_,vertex_filter_));
     }
     vertex_iterator vertex_begin() const {
-        return vertex_iterator(graph_.vertex_begin ());
+        if (graph_.vertex_begin () == graph_.vertex_end ()) {
+            return vertex_iterator(graph_.vertex_end (),
+                                   graph_.vertex_end (),
+                                   vertex_filter_function( vertex_filter_));
+        }
+        vertex_iterator iter (graph_.vertex_begin (), graph_.vertex_end (),
+                              vertex_filter_function( vertex_filter_));
+        if (!vertex_filter_(*iter)) iter++;
+        return iter;
+
     }
     vertex_iterator vertex_end () const {
-        return vertex_iterator(graph_.vertex_end ());
+        return vertex_iterator(graph_.vertex_end (),
+                               graph_.vertex_end (),
+                               vertex_filter_function(vertex_filter_));
     }
     edge_iterator edge_begin(vertex_iterator const &from) const {
+        if (from == vertex_iterator(graph_.vertex_end ())) {
+            return edge_iterator();
+        }
         auto from_iter = graph_.find_vertex (*from);
-        return edge_iterator(graph_.edge_begin (from_iter));
+        if (graph_.edge_begin (from_iter) == graph_.edge_end (from_iter)) {
+            return edge_iterator(graph_.edge_end  (from_iter),
+                                 graph_.edge_end (from_iter),
+                                 edge_filter_function(edge_filter_,vertex_filter_));
+        }
+
+        edge_iterator iter(graph_.edge_begin (from_iter),
+                             graph_.edge_end (from_iter),
+                             edge_filter_function(edge_filter_,vertex_filter_));
+        if (!vertex_filter_(*iter.from()) || !vertex_filter_(*iter.to())
+                || !edge_filter_(*iter)) iter++;
+        return iter;
     }
     edge_iterator edge_end (vertex_iterator const &from) const {
         auto from_iter = graph_.find_vertex (*from);
-        return edge_iterator(graph_.edge_end (from_iter));
+        if (from_iter == graph_.vertex_end ()) {
+            return edge_iterator();
+        }
+        return edge_iterator(graph_.edge_end (from_iter),
+                             graph_.edge_end (from_iter),
+                             edge_filter_function(edge_filter_, vertex_filter_));
     }
 private:
     graph const& graph_;
